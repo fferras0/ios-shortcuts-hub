@@ -8,6 +8,7 @@ import {
   buildTelegramDirectShortcut,
   buildWebAppLauncherShortcut,
   downloadShortcutFile,
+  downloadMobileConfigFile,
 } from '@/lib/plist-builder';
 
 interface ShortcutBuilderViewProps {
@@ -72,11 +73,10 @@ export const ShortcutBuilderView: React.FC<ShortcutBuilderViewProps> = ({ onToas
           data = await res.json();
         }
       } catch (networkErr) {
-        // Fallback to client-side deterministic engine if static
+        // Fallback
       }
 
       if (!data || !data.success) {
-        // Run client-side deterministic RAG engine
         const { generateDeterministicShortcut } = await import('@/lib/shortcuts-knowledge');
         const generated = generateDeterministicShortcut(aiPrompt, aiTitle);
         data = {
@@ -110,6 +110,21 @@ export const ShortcutBuilderView: React.FC<ShortcutBuilderViewProps> = ({ onToas
     onToast(`تم تنزيل ملف "${generatedResult.shortcutName}.shortcut" بنجاح!`);
   };
 
+  const handleDirectMessagingAction = () => {
+    if (!phoneOrUser.trim()) {
+      onToast('يرجى إدخال رقم الهاتف أو اسم المستخدم.', 'info');
+      return;
+    }
+    const cleanPhone = phoneOrUser.replace(/[^0-9]/g, '');
+    const encodedText = messageTemplate ? encodeURIComponent(messageTemplate) : '';
+    const url = platform === 'whatsapp'
+      ? `https://wa.me/${cleanPhone}${encodedText ? `?text=${encodedText}` : ''}`
+      : `https://t.me/${phoneOrUser.trim().replace(/^@/, '')}${encodedText ? `?text=${encodedText}` : ''}`;
+    
+    window.open(url, '_blank');
+    onToast('جاري فتح المحادثة مباشرة!');
+  };
+
   const handleGenerateMessaging = (e: React.FormEvent) => {
     e.preventDefault();
     if (!phoneOrUser.trim()) {
@@ -129,6 +144,19 @@ export const ShortcutBuilderView: React.FC<ShortcutBuilderViewProps> = ({ onToas
     downloadShortcutFile(cleanName, xml);
     confetti({ particleCount: 50, spread: 60 });
     onToast(`تم توليد وتنزيل اختصار ${platform === 'whatsapp' ? 'واتساب' : 'تليجرام'} بنجاح!`);
+  };
+
+  const handleGenerateWebClip = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!webUrl.trim()) {
+      onToast('يرجى إدخال رابط الموقع (URL).', 'info');
+      return;
+    }
+
+    const title = webTitle.trim() || 'Web App';
+    downloadMobileConfigFile(title, title, webUrl);
+    confetti({ particleCount: 50, spread: 60 });
+    onToast('تم تنزيل ملف التثبيت للشاشة الرئيسية (.mobileconfig)');
   };
 
   const handleGenerateWebApp = (e: React.FormEvent) => {
@@ -152,15 +180,24 @@ export const ShortcutBuilderView: React.FC<ShortcutBuilderViewProps> = ({ onToas
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full liquid-capsule mb-4 border border-night-500/30">
           <GlassIcon name="Wand2" size="sm" accentColor="#3894E8" className="!w-5 !h-5 !rounded-full" />
           <span className="text-xs sm:text-sm font-semibold text-slate-200">
-            مولّد ومحرر اختصارات <span className="text-night-400 font-number">.shortcut</span>
+            مولّد ومحرر اختصارات <span className="text-night-400 font-number">iOS</span>
           </span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-black text-white mb-3">
           أنشئ اختصارك المخصص في ثوانٍ
         </h1>
         <p className="text-sm sm:text-base text-slate-300">
-          اختر الأداة المناسبة لتوليد ملف اختصار آبل حقيقي جاهز للعمل على هاتفك أو جهاز Mac مباشرة.
+          اختر الأداة المناسبة لتوليد الاختصار أو التثبيت المباشر على الشاشة الرئيسية لجهازك.
         </p>
+      </div>
+
+      {/* iOS Apple Policy Banner */}
+      <div className="flex items-start gap-3 p-4 rounded-2xl bg-night-900/80 border border-night-600/40 max-w-3xl mx-auto mb-8 text-xs sm:text-sm text-slate-300">
+        <GlassIcon name="Info" size="sm" accentColor="#60A9F6" className="!w-6 !h-6 !rounded" />
+        <div className="leading-relaxed">
+          <span className="font-bold text-night-300 block mb-1">ملاحظة أمان نظام Apple iOS 15+:</span>
+          ملفات <code className="font-number px-1 rounded bg-night-800 text-slate-200">.shortcut</code> المولدة من المتصفح تتطلب تفعيل السماح بالاختصارات غير الموقعة، أو يمكنك استخدام زر <strong>التشغيل المباشر</strong> أو <strong>ملف WebClip</strong> للإضافة الفورية دون قيود.
+        </div>
       </div>
 
       {/* Tabs Selector */}
@@ -365,13 +402,24 @@ export const ShortcutBuilderView: React.FC<ShortcutBuilderViewProps> = ({ onToas
               />
             </div>
 
-            <button
-              type="submit"
-              className="w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl text-sm font-bold text-white liquid-btn-primary shadow-xl"
-            >
-              <GlassIcon name="Download" size="sm" accentColor="#FFFFFF" className="!w-5 !h-5 !rounded" />
-              <span>توليد وتنزيل اختصار المراسلة (.shortcut)</span>
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleDirectMessagingAction}
+                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl text-sm font-bold text-white liquid-btn-primary shadow-xl"
+              >
+                <GlassIcon name="ExternalLink" size="sm" accentColor="#FFFFFF" className="!w-5 !h-5 !rounded" />
+                <span>فتح المحادثة مباشرة الآن</span>
+              </button>
+
+              <button
+                type="submit"
+                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl text-sm font-bold text-slate-200 liquid-btn-secondary hover:text-white"
+              >
+                <GlassIcon name="Download" size="sm" accentColor="#60A9F6" className="!w-5 !h-5 !rounded" />
+                <span>تنزيل ملف .shortcut</span>
+              </button>
+            </div>
           </form>
         </div>
       )}
@@ -379,7 +427,7 @@ export const ShortcutBuilderView: React.FC<ShortcutBuilderViewProps> = ({ onToas
       {/* Tab 3: Web App Launcher */}
       {activeTab === 'webapp' && (
         <div className="p-6 md:p-8 rounded-3xl liquid-glass border border-night-500/40 shadow-2xl">
-          <form onSubmit={handleGenerateWebApp} className="space-y-6">
+          <form onSubmit={handleGenerateWebClip} className="space-y-6">
             <div>
               <label className="block text-sm font-bold text-slate-200 mb-2">
                 اسم تطبيق الويب
@@ -406,13 +454,24 @@ export const ShortcutBuilderView: React.FC<ShortcutBuilderViewProps> = ({ onToas
               />
             </div>
 
-            <button
-              type="submit"
-              className="w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl text-sm font-bold text-white liquid-btn-primary shadow-xl"
-            >
-              <GlassIcon name="Download" size="sm" accentColor="#FFFFFF" className="!w-5 !h-5 !rounded" />
-              <span>توليد وتنزيل اختصار مشغل الويب (.shortcut)</span>
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <button
+                type="submit"
+                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl text-sm font-bold text-white liquid-btn-primary shadow-xl"
+              >
+                <GlassIcon name="Smartphone" size="sm" accentColor="#FFFFFF" className="!w-5 !h-5 !rounded" />
+                <span>تثبيت للشاشة الرئيسية (WebClip)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleGenerateWebApp}
+                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl text-sm font-bold text-slate-200 liquid-btn-secondary hover:text-white"
+              >
+                <GlassIcon name="Download" size="sm" accentColor="#60A9F6" className="!w-5 !h-5 !rounded" />
+                <span>تنزيل ملف .shortcut</span>
+              </button>
+            </div>
           </form>
         </div>
       )}

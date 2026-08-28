@@ -1,6 +1,7 @@
 /**
- * Apple Shortcuts Plist (.shortcut) XML Generator
- * Produces valid XML property lists with WFWorkflowActions conforming to Apple iOS Shortcuts schema.
+ * Apple Shortcuts Plist (.shortcut) & iOS WebClip Profile Generator
+ * Produces valid XML property lists with WFWorkflowActions conforming to Apple iOS Shortcuts schema,
+ * and Apple .mobileconfig WebClip profiles for 1-click home screen installation.
  */
 
 export interface PlistAction {
@@ -132,6 +133,80 @@ export function downloadShortcutFile(filename: string, xmlContent: string): void
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * iOS WebClip Profile (.mobileconfig) Generator
+ * Allows direct, 1-click home screen installation on iOS without signing restrictions.
+ */
+export function generateWebClipMobileConfig(title: string, targetUrl: string): string {
+  let url = targetUrl.trim();
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = `https://${url}`;
+  }
+  const cleanTitle = escapeXml(title || 'Web App');
+  const uuid1 = '3D5C' + Math.random().toString(36).substring(2, 10).toUpperCase() + '-4E8B';
+  const uuid2 = '9F1A' + Math.random().toString(36).substring(2, 10).toUpperCase() + '-8C2D';
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>FullScreen</key>
+      <true/>
+      <key>IsRemovable</key>
+      <true/>
+      <key>Label</key>
+      <string>${cleanTitle}</string>
+      <key>PayloadDescription</key>
+      <string>WebClip Profile for ${cleanTitle}</string>
+      <key>PayloadDisplayName</key>
+      <string>${cleanTitle}</string>
+      <key>PayloadIdentifier</key>
+      <string>com.shortcutshub.webclip.${uuid1}</string>
+      <key>PayloadType</key>
+      <string>com.apple.webClip.managed</string>
+      <key>PayloadUUID</key>
+      <string>${uuid1}</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      <key>Precomposed</key>
+      <true/>
+      <key>URL</key>
+      <string>${escapeXml(url)}</string>
+    </dict>
+  </array>
+  <key>PayloadDisplayName</key>
+  <string>${cleanTitle}</string>
+  <key>PayloadIdentifier</key>
+  <string>com.shortcutshub.profile.${uuid2}</string>
+  <key>PayloadRemovalDisallowed</key>
+  <false/>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadUUID</key>
+  <string>${uuid2}</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+</dict>
+</plist>`;
+}
+
+export function downloadMobileConfigFile(filename: string, title: string, url: string): void {
+  const xml = generateWebClipMobileConfig(title, url);
+  const blob = new Blob([xml], { type: 'application/x-apple-aspen-config;charset=utf-8' });
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  const cleanName = filename.endsWith('.mobileconfig') ? filename : `${filename}.mobileconfig`;
+  a.download = cleanName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(blobUrl);
 }
 
 /**
