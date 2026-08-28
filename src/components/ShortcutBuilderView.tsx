@@ -57,18 +57,37 @@ export const ShortcutBuilderView: React.FC<ShortcutBuilderViewProps> = ({ onToas
     setGeneratedResult(null);
 
     try {
-      const res = await fetch('/api/generate-ai-shortcut', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: aiPrompt,
-          title: aiTitle,
-        }),
-      });
+      let data: any = null;
+      try {
+        const res = await fetch('/api/generate-ai-shortcut', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: aiPrompt,
+            title: aiTitle,
+          }),
+        });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'فشل توليد الاختصار');
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch (networkErr) {
+        // Fallback to client-side deterministic engine if static
+      }
+
+      if (!data || !data.success) {
+        // Run client-side deterministic RAG engine
+        const { generateDeterministicShortcut } = await import('@/lib/shortcuts-knowledge');
+        const generated = generateDeterministicShortcut(aiPrompt, aiTitle);
+        data = {
+          success: true,
+          shortcutName: generated.shortcutName,
+          xmlPlist: generated.xmlPlist,
+          fileName: `${generated.shortcutName.replace(/[/\\?%*:|"<>]/g, '-')}.shortcut`,
+          summary: generated.summary,
+          actionsCount: generated.actionsCount,
+          isFallback: true,
+        };
       }
 
       setGeneratedResult(data);
