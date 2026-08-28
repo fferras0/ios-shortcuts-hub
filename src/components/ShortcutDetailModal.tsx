@@ -6,7 +6,6 @@ import { ShortcutItem } from '@/types/shortcut';
 import { CATEGORIES } from '@/data/initial-shortcuts';
 import { GlassIcon } from './GlassIcon';
 import { isFavorite, toggleFavorite } from '@/lib/favorites-store';
-import { generateShortcutXmlPlist, downloadShortcutFile } from '@/lib/plist-builder';
 
 interface ShortcutDetailModalProps {
   shortcut: ShortcutItem | null;
@@ -23,6 +22,7 @@ export const ShortcutDetailModal: React.FC<ShortcutDetailModalProps> = ({
 
   const [favorited, setFavorited] = useState<boolean>(() => isFavorite(shortcut.id));
   const categoryMeta = CATEGORIES.find((c) => c.id === shortcut.category) || CATEGORIES[0];
+  const isRealIcloudUrl = /https:\/\/www\.icloud\.com\/shortcuts\/[a-f0-9]{32}/i.test(shortcut.icloud_url);
 
   const handleToggleFavorite = () => {
     const nextState = toggleFavorite(shortcut.id);
@@ -36,29 +36,12 @@ export const ShortcutDetailModal: React.FC<ShortcutDetailModalProps> = ({
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(shortcut.icloud_url);
-    onToast('تم نسخ رابط التثبيت إلى الحافظة بنجاح!');
+    onToast('تم نسخ الرابط إلى الحافظة بنجاح!');
   };
 
-  const handleDownloadFile = () => {
-    const xml = generateShortcutXmlPlist({
-      name: shortcut.title,
-      actions: [
-        {
-          WFWorkflowActionIdentifier: 'is.workflow.actions.url',
-          WFWorkflowActionParameters: {
-            WFURLActionURL: shortcut.icloud_url,
-          },
-        },
-        {
-          WFWorkflowActionIdentifier: 'is.workflow.actions.openurl',
-          WFWorkflowActionParameters: {
-            Show_WFInput: true,
-          },
-        },
-      ],
-    });
-    downloadShortcutFile(shortcut.slug, xml);
-    onToast(`تم تنزيل ملف "${shortcut.title}.shortcut"`);
+  const handleOpenShortcutsApp = () => {
+    window.location.href = 'shortcuts://create-shortcut';
+    onToast('جاري فتح تطبيق الاختصارات على جهازك...');
   };
 
   return (
@@ -131,35 +114,46 @@ export const ShortcutDetailModal: React.FC<ShortcutDetailModalProps> = ({
             </div>
           )}
 
-          {/* QR Code & Direct Scan Section */}
+          {/* QR Code & Direct Action Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl liquid-glass border border-night-600/30 items-center">
             <div className="flex flex-col items-center justify-center p-3 rounded-xl bg-white/95 text-night-950 shadow-lg">
               <QRCodeSVG
-                value={shortcut.icloud_url}
+                value={isRealIcloudUrl ? shortcut.icloud_url : window.location.href}
                 size={140}
                 level="M"
                 includeMargin={false}
               />
               <span className="text-[11px] font-bold text-slate-800 mt-2">
-                امسح بكاميرا الآيفون للتثبيت المباشر
+                امسح بكاميرا الآيفون للفتح السريع
               </span>
             </div>
 
             <div className="flex flex-col gap-2.5">
               <h4 className="text-xs font-bold text-night-300 uppercase tracking-wider">
-                طرق التثبيت المتاحة
+                طريقة التثبيت والاستخدام
               </h4>
               <p className="text-xs text-slate-300 leading-relaxed">
-                1. يمكنك مسح رمز الـ QR مباشرة من كاميرا هاتفك. <br />
-                2. أو الضغط على زر &quot;تثبيت في تطبيق الاختصارات&quot;. <br />
-                3. أو تنزيل ملف الـ <span className="font-number">.shortcut</span> وفتحه في تطبيق الملفات.
+                {isRealIcloudUrl ? (
+                  <>اضغط على زر &quot;تثبيت في Shortcuts&quot; ليتم فتح الرابط الرسمي وإضافته بنقرة واحدة إلى مكتبتك.</>
+                ) : (
+                  <>يمكنك فتح تطبيق الاختصارات الرسمي وإنشاء الاختصار بضغطة زر وتخصيص الأوامر المطلوبة.</>
+                )}
               </p>
+
+              <button
+                onClick={handleOpenShortcutsApp}
+                className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold text-white liquid-btn-primary shadow-md"
+              >
+                <GlassIcon name="Layers" size="sm" accentColor="#FFFFFF" className="!w-4 !h-4 !rounded" />
+                <span>فتح تطبيق Shortcuts على الجهاز</span>
+              </button>
+
               <button
                 onClick={handleCopyLink}
                 className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold text-slate-200 liquid-btn-secondary hover:text-white"
               >
                 <GlassIcon name="Copy" size="sm" accentColor="#60A9F6" className="!w-4 !h-4 !rounded" />
-                <span>نسخ رابط الاختصار</span>
+                <span>نسخ الرابط</span>
               </button>
             </div>
           </div>
@@ -181,23 +175,25 @@ export const ShortcutDetailModal: React.FC<ShortcutDetailModalProps> = ({
           </button>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleDownloadFile}
-              className="flex items-center gap-1.5 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold text-slate-200 liquid-btn-secondary hover:text-white"
-            >
-              <GlassIcon name="FileDown" size="sm" accentColor="#93C5FD" className="!w-5 !h-5 !rounded-md" />
-              <span className="font-number">تنزيل .shortcut</span>
-            </button>
-
-            <a
-              href={shortcut.icloud_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 py-2.5 px-5 rounded-xl text-xs sm:text-sm font-bold text-white liquid-btn-primary"
-            >
-              <GlassIcon name="ExternalLink" size="sm" accentColor="#FFFFFF" className="!w-5 !h-5 !rounded-md" />
-              <span>تثبيت في Shortcuts</span>
-            </a>
+            {isRealIcloudUrl ? (
+              <a
+                href={shortcut.icloud_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 py-2.5 px-5 rounded-xl text-xs sm:text-sm font-bold text-white liquid-btn-primary"
+              >
+                <GlassIcon name="ExternalLink" size="sm" accentColor="#FFFFFF" className="!w-5 !h-5 !rounded-md" />
+                <span>تثبيت في Shortcuts</span>
+              </a>
+            ) : (
+              <button
+                onClick={handleOpenShortcutsApp}
+                className="flex items-center gap-2 py-2.5 px-5 rounded-xl text-xs sm:text-sm font-bold text-white liquid-btn-primary"
+              >
+                <GlassIcon name="Zap" size="sm" accentColor="#FFFFFF" className="!w-5 !h-5 !rounded-md" />
+                <span>فتح تطبيق الاختصارات</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -5,7 +5,6 @@ import { ShortcutItem } from '@/types/shortcut';
 import { CATEGORIES } from '@/data/initial-shortcuts';
 import { GlassIcon } from './GlassIcon';
 import { isFavorite, toggleFavorite } from '@/lib/favorites-store';
-import { generateShortcutXmlPlist, downloadShortcutFile } from '@/lib/plist-builder';
 
 interface ShortcutCardProps {
   shortcut: ShortcutItem;
@@ -22,6 +21,7 @@ export const ShortcutCard: React.FC<ShortcutCardProps> = ({
   const [isHeartBursting, setIsHeartBursting] = useState(false);
 
   const categoryMeta = CATEGORIES.find((c) => c.id === shortcut.category) || CATEGORIES[0];
+  const isRealIcloudUrl = /https:\/\/www\.icloud\.com\/shortcuts\/[a-f0-9]{32}/i.test(shortcut.icloud_url);
 
   const handleToggleFavorite = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -38,32 +38,13 @@ export const ShortcutCard: React.FC<ShortcutCardProps> = ({
 
   const handleInstallClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Try shortcuts protocol or open iCloud url
-    window.open(shortcut.icloud_url, '_blank');
-    onToast(`جاري فتح رابط تثبيت "${shortcut.title}"`);
-  };
-
-  const handleDownloadPlist = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const xml = generateShortcutXmlPlist({
-      name: shortcut.title,
-      actions: [
-        {
-          WFWorkflowActionIdentifier: 'is.workflow.actions.url',
-          WFWorkflowActionParameters: {
-            WFURLActionURL: shortcut.icloud_url,
-          },
-        },
-        {
-          WFWorkflowActionIdentifier: 'is.workflow.actions.openurl',
-          WFWorkflowActionParameters: {
-            Show_WFInput: true,
-          },
-        },
-      ],
-    });
-    downloadShortcutFile(shortcut.slug, xml);
-    onToast(`تم تنزيل ملف .shortcut لاختصار "${shortcut.title}"`);
+    if (isRealIcloudUrl) {
+      window.open(shortcut.icloud_url, '_blank');
+      onToast(`جاري فتح رابط تثبيت "${shortcut.title}"`);
+    } else {
+      // Open detail modal with steps and actions guide
+      onOpenDetails(shortcut);
+    }
   };
 
   return (
@@ -144,16 +125,19 @@ export const ShortcutCard: React.FC<ShortcutCardProps> = ({
             onClick={handleInstallClick}
             className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold text-white liquid-btn-primary"
           >
-            <GlassIcon name="ExternalLink" size="sm" accentColor="#FFFFFF" className="!w-4 !h-4 !rounded" />
-            <span>تثبيت مباشر</span>
+            <GlassIcon name={isRealIcloudUrl ? "ExternalLink" : "Eye"} size="sm" accentColor="#FFFFFF" className="!w-4 !h-4 !rounded" />
+            <span>{isRealIcloudUrl ? "تثبيت في Shortcuts" : "عرض التفاصيل والتثبيت"}</span>
           </button>
 
           <button
-            onClick={handleDownloadPlist}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenDetails(shortcut);
+            }}
             className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold text-slate-200 liquid-btn-secondary hover:text-white"
           >
-            <GlassIcon name="FileDown" size="sm" accentColor="#93C5FD" className="!w-4 !h-4 !rounded" />
-            <span className="font-number">.shortcut</span>
+            <GlassIcon name="QrCode" size="sm" accentColor="#93C5FD" className="!w-4 !h-4 !rounded" />
+            <span>رمز QR والخطوات</span>
           </button>
         </div>
       </div>
